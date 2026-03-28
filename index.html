@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Alon's Tasks</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f0f0e;
+    --surface: #1a1917;
+    --surface2: #222220;
+    --surface3: #2a2a27;
+    --border: #2e2e2a;
+    --border2: #3a3a35;
+    --text: #e8e4db;
+    --muted: #7a7670;
+    --muted2: #5a5652;
+    --accent: #c8a96e;
+    --accent-dim: #8a7248;
+    --accent-light: #2a2218;
+    --green: #4a9e6e;
+    --green-dim: #1e3828;
+    --green-light: #a8d8b8;
+    --red: #c05040;
+    --blue: #4a7eb8;
+    --blue-dim: #1a2a3e;
+    --radius: 12px;
+    --radius-sm: 7px;
+    --mono: 'Geist Mono', monospace;
+    --serif: 'Instrument Serif', serif;
+    --sans: 'DM Sans', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body { font-family: var(--sans); background: var(--bg); color: var(--text); min-height: 100vh; max-width: 520px; margin: 0 auto; }
+
+  /* HEADER */
+  .header { padding: 28px 20px 0; }
+  .date-line { font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 6px; }
+  .page-title { font-family: var(--serif); font-size: 36px; color: var(--text); font-style: italic; line-height: 1; margin-bottom: 20px; }
+
+  /* TABS */
+  .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin: 0 20px; }
+  .tab { padding: 10px 16px; border: none; background: transparent; font-family: var(--sans); font-size: 13px; font-weight: 400; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all 0.15s; white-space: nowrap; }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 500; }
+
+  .content { padding: 20px; }
+  .view { display: none; }
+  .view.active { display: block; }
+
+  /* ADD TASK */
+  .add-box { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-bottom: 20px; }
+  .add-row { display: flex; gap: 8px; margin-bottom: 10px; }
+  .add-input { flex: 1; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 9px 12px; font-family: var(--sans); font-size: 14px; color: var(--text); outline: none; transition: border 0.15s; }
+  .add-input::placeholder { color: var(--muted2); }
+  .add-input:focus { border-color: var(--accent-dim); }
+  .add-btn { background: var(--accent); color: var(--bg); border: none; border-radius: var(--radius-sm); padding: 9px 16px; font-family: var(--sans); font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; transition: opacity 0.15s; }
+  .add-btn:hover { opacity: 0.85; }
+  .when-toggle { display: flex; gap: 6px; }
+  .when-btn { flex: 1; padding: 7px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-family: var(--mono); font-size: 11px; letter-spacing: 0.5px; text-transform: uppercase; cursor: pointer; text-align: center; color: var(--muted); background: var(--surface2); transition: all 0.15s; }
+  .when-btn.sel-today { background: var(--accent-light); color: var(--accent); border-color: var(--accent-dim); }
+  .when-btn.sel-next { background: var(--blue-dim); color: #7aaad4; border-color: #2a4a6e; }
+
+  /* TASK SECTIONS */
+  .section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .section-label { font-family: var(--mono); font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); }
+  .section-count { font-family: var(--mono); font-size: 10px; color: var(--muted2); }
+  .tasks { display: flex; flex-direction: column; gap: 6px; margin-bottom: 24px; }
+
+  /* TASK ITEM */
+  .task { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; display: flex; align-items: flex-start; gap: 10px; transition: all 0.2s; animation: fadeIn 0.2s ease; }
+  @keyframes fadeIn { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:translateY(0); } }
+  .task:hover { border-color: var(--border2); }
+  .task.done { opacity: 0.45; }
+  .task.done .task-text { text-decoration: line-through; color: var(--muted); }
+
+  .check { width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid var(--border2); background: transparent; cursor: pointer; flex-shrink: 0; margin-top: 1px; position: relative; transition: all 0.15s; }
+  .check.checked { background: var(--green); border-color: var(--green); }
+  .check.checked::after { content:''; position:absolute; top:4px; left:6px; width:4px; height:7px; border:1.5px solid white; border-top:none; border-left:none; transform:rotate(45deg); }
+
+  .task-body { flex: 1; min-width: 0; }
+  .task-text { font-size: 14px; line-height: 1.4; word-break: break-word; }
+  .task-meta { display: flex; gap: 8px; margin-top: 5px; align-items: center; flex-wrap: wrap; }
+  .task-tag { font-family: var(--mono); font-size: 10px; padding: 2px 7px; border-radius: 4px; letter-spacing: 0.3px; }
+  .tag-today { background: var(--accent-light); color: var(--accent); }
+  .tag-next { background: var(--blue-dim); color: #7aaad4; }
+  .task-remark { font-size: 12px; color: var(--muted); font-style: italic; margin-top: 4px; }
+  .task-date { font-family: var(--mono); font-size: 10px; color: var(--muted2); }
+
+  .task-actions { display: flex; gap: 4px; opacity: 0; transition: opacity 0.15s; flex-shrink: 0; }
+  .task:hover .task-actions { opacity: 1; }
+  .act-btn { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 13px; padding: 3px 5px; border-radius: 4px; transition: all 0.15s; line-height: 1; }
+  .act-btn:hover { background: var(--surface2); color: var(--text); }
+  .act-btn.move { font-size: 11px; font-family: var(--mono); }
+
+  /* COMPLETE MODAL */
+  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 200; display: none; align-items: center; justify-content: center; padding: 20px; }
+  .modal-bg.open { display: flex; }
+  .modal { background: var(--surface); border: 1px solid var(--border2); border-radius: var(--radius); padding: 20px; width: 100%; max-width: 360px; }
+  .modal-title { font-family: var(--serif); font-size: 20px; font-style: italic; margin-bottom: 4px; }
+  .modal-task { font-size: 13px; color: var(--muted); margin-bottom: 16px; border-left: 2px solid var(--accent-dim); padding-left: 10px; }
+  .modal-label { font-family: var(--mono); font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  .modal-input { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 9px 12px; font-family: var(--sans); font-size: 14px; color: var(--text); outline: none; resize: none; margin-bottom: 14px; }
+  .modal-input:focus { border-color: var(--accent-dim); }
+  .modal-btns { display: flex; gap: 8px; }
+  .modal-cancel { flex: 1; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px; font-family: var(--sans); font-size: 14px; color: var(--muted); cursor: pointer; }
+  .modal-confirm { flex: 2; background: var(--green); border: none; border-radius: var(--radius-sm); padding: 10px; font-family: var(--sans); font-size: 14px; font-weight: 500; color: white; cursor: pointer; transition: opacity 0.15s; }
+  .modal-confirm:hover { opacity: 0.85; }
+
+  /* NOTES */
+  .notes-area { width: 100%; min-height: 300px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; font-family: var(--sans); font-size: 14px; color: var(--text); outline: none; resize: none; line-height: 1.7; }
+  .notes-area::placeholder { color: var(--muted2); }
+  .notes-area:focus { border-color: var(--border2); }
+  .notes-save-row { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
+  .notes-status { font-family: var(--mono); font-size: 11px; color: var(--muted2); }
+  .notes-save { background: var(--accent); color: var(--bg); border: none; border-radius: var(--radius-sm); padding: 8px 18px; font-family: var(--sans); font-size: 13px; font-weight: 500; cursor: pointer; transition: opacity 0.15s; }
+  .notes-save:hover { opacity: 0.85; }
+
+  /* HISTORY */
+  .history-item { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 8px; }
+  .history-text { font-size: 14px; line-height: 1.4; margin-bottom: 6px; }
+  .history-meta { display: flex; gap: 12px; align-items: center; }
+  .history-date { font-family: var(--mono); font-size: 11px; color: var(--green-light); }
+  .history-remark { font-size: 12px; color: var(--muted); font-style: italic; }
+
+  /* EMPTY */
+  .empty { text-align: center; padding: 32px 20px; color: var(--muted2); }
+  .empty-icon { font-size: 32px; margin-bottom: 10px; opacity: 0.5; }
+  .empty p { font-size: 13px; }
+
+  /* MOVE BTN tooltip */
+  .move-tip { font-size: 10px; }
+
+  /* TOAST */
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(60px); background: var(--surface3); border: 1px solid var(--border2); color: var(--text); padding: 9px 18px; border-radius: 30px; font-size: 13px; transition: transform 0.3s ease; z-index: 999; white-space: nowrap; }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="date-line" id="date-line"></div>
+  <div class="page-title">My Tasks</div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('tasks',this)">Tasks</button>
+  <button class="tab" onclick="switchTab('history',this)">Completed</button>
+  <button class="tab" onclick="switchTab('notes',this)">Notes</button>
+</div>
+
+<div class="content">
+
+  <!-- TASKS -->
+  <div id="view-tasks" class="view active">
+    <div class="add-box">
+      <div class="add-row">
+        <input class="add-input" id="task-input" placeholder="New task..." onkeydown="if(event.key==='Enter')addTask()">
+        <button class="add-btn" onclick="addTask()">Add</button>
+      </div>
+      <div class="when-toggle">
+        <button class="when-btn sel-today" id="when-today" onclick="selectWhen('today')">Current</button>
+        <button class="when-btn" id="when-next" onclick="selectWhen('next')">Future</button>
+      </div>
+    </div>
+
+    <div class="section-head">
+      <span class="section-label">Current</span>
+      <span class="section-count" id="count-today">0 tasks</span>
+    </div>
+    <div class="tasks" id="tasks-today"></div>
+
+    <div class="section-head">
+      <span class="section-label">Future</span>
+      <span class="section-count" id="count-next">0 tasks</span>
+    </div>
+    <div class="tasks" id="tasks-next"></div>
+  </div>
+
+  <!-- HISTORY -->
+  <div id="view-history" class="view">
+    <div id="history-list"></div>
+  </div>
+
+  <!-- NOTES -->
+  <div id="view-notes" class="view">
+    <textarea class="notes-area" id="notes-area" placeholder="Write anything here — ideas, reminders, quick notes..."></textarea>
+    <div class="notes-save-row">
+      <span class="notes-status" id="notes-status"></span>
+      <button class="notes-save" onclick="saveNotes()">Save</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- COMPLETE MODAL -->
+<div class="modal-bg" id="modal-bg">
+  <div class="modal">
+    <div class="modal-title">Mark as done</div>
+    <div class="modal-task" id="modal-task-name"></div>
+    <div class="modal-label">Remarks (optional)</div>
+    <textarea class="modal-input" id="modal-remark" rows="3" placeholder="Any notes about this task..."></textarea>
+    <div class="modal-btns">
+      <button class="modal-cancel" onclick="closeModal()">Cancel</button>
+      <button class="modal-confirm" onclick="confirmComplete()">Mark complete</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, setDoc, getDoc, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDgikNn60xspZmPf_Lp4SzXQwvsjhV50OM",
+  authDomain: "super-list-ad2f7.firebaseapp.com",
+  projectId: "super-list-ad2f7",
+  storageBucket: "super-list-ad2f7.firebasestorage.app",
+  messagingSenderId: "337078022846",
+  appId: "1:337078022846:web:397438abf56b9939ff64ef"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+let tasks = [], selectedWhen = 'today', pendingCompleteId = null;
+
+// Date header
+const now = new Date();
+document.getElementById('date-line').textContent = now.toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+
+// Real-time listeners
+onSnapshot(query(collection(db,'tasks'), orderBy('createdAt','asc')), snap => {
+  tasks = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  renderTasks();
+});
+
+onSnapshot(query(collection(db,'completed'), orderBy('completedAt','desc')), snap => {
+  const completed = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  renderHistory(completed);
+});
+
+// Load notes
+getDoc(doc(db,'config','notes')).then(snap => {
+  if (snap.exists()) document.getElementById('notes-area').value = snap.data().content || '';
+});
+
+// ---- TASKS ----
+window.selectWhen = function(when) {
+  selectedWhen = when;
+  document.getElementById('when-today').className = 'when-btn' + (when==='today' ? ' sel-today' : '');
+  document.getElementById('when-next').className  = 'when-btn' + (when==='next'  ? ' sel-next'  : '');
+};
+
+window.addTask = async function() {
+  const input = document.getElementById('task-input');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  await addDoc(collection(db,'tasks'), { text, when: selectedWhen, createdAt: serverTimestamp() });
+  showToast('Task added');
+};
+
+window.startComplete = function(id) {
+  const task = tasks.find(t => t.id === id); if (!task) return;
+  pendingCompleteId = id;
+  document.getElementById('modal-task-name').textContent = task.text;
+  document.getElementById('modal-remark').value = '';
+  document.getElementById('modal-bg').classList.add('open');
+  setTimeout(() => document.getElementById('modal-remark').focus(), 100);
+};
+
+window.closeModal = function() {
+  document.getElementById('modal-bg').classList.remove('open');
+  pendingCompleteId = null;
+};
+
+window.confirmComplete = async function() {
+  if (!pendingCompleteId) return;
+  const task = tasks.find(t => t.id === pendingCompleteId); if (!task) return;
+  const remark = document.getElementById('modal-remark').value.trim();
+  const completedAt = new Date();
+  await addDoc(collection(db,'completed'), {
+    text: task.text,
+    remark: remark || '',
+    completedAt: serverTimestamp(),
+    completedDate: completedAt.toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' }),
+    when: task.when
+  });
+  await deleteDoc(doc(db,'tasks', pendingCompleteId));
+  closeModal();
+  showToast('Task completed ✓');
+};
+
+window.deleteTask = async function(id) {
+  await deleteDoc(doc(db,'tasks', id));
+  showToast('Task removed');
+};
+
+window.moveTask = async function(id, to) {
+  await updateDoc(doc(db,'tasks', id), { when: to });
+  showToast(`Moved to ${to === 'today' ? 'Current' : 'Future'}`);
+};
+
+function fmt(ts) {
+  if (!ts) return '';
+  return ts.toDate ? ts.toDate().toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' }) : '';
+}
+
+function renderTasks() {
+  const today = tasks.filter(t => t.when === 'today');
+  const next  = tasks.filter(t => t.when === 'next');
+
+  document.getElementById('count-today').textContent = today.length + ' task' + (today.length!==1?'s':'');
+  document.getElementById('count-next').textContent  = next.length  + ' task' + (next.length!==1?'s':'');
+
+  document.getElementById('tasks-today').innerHTML = today.length
+    ? today.map(t => renderTask(t)).join('')
+    : `<div class="empty"><div class="empty-icon">◦</div><p>No current tasks</p></div>`;
+
+  document.getElementById('tasks-next').innerHTML = next.length
+    ? next.map(t => renderTask(t)).join('')
+    : `<div class="empty"><div class="empty-icon">◦</div><p>No future tasks</p></div>`;
+}
+
+function renderTask(t) {
+  const moveLabel = t.when === 'today' ? '→ Future' : '→ Current';
+  const moveTo    = t.when === 'today' ? 'next'   : 'today';
+  return `<div class="task" id="task-${t.id}">
+    <button class="check" onclick="startComplete('${t.id}')"></button>
+    <div class="task-body">
+      <div class="task-text">${escHtml(t.text)}</div>
+    </div>
+    <div class="task-actions">
+      <button class="act-btn move" onclick="moveTask('${t.id}','${moveTo}')" title="Move">${moveLabel}</button>
+      <button class="act-btn" onclick="deleteTask('${t.id}')" title="Delete">✕</button>
+    </div>
+  </div>`;
+}
+
+function renderHistory(completed) {
+  const el = document.getElementById('history-list');
+  if (!completed.length) {
+    el.innerHTML = `<div class="empty"><div class="empty-icon">✓</div><p>Completed tasks will appear here</p></div>`;
+    return;
+  }
+  // Group by month
+  const groups = {};
+  completed.forEach(c => {
+    const d = c.completedAt ? c.completedAt.toDate() : new Date();
+    const key = d.toLocaleDateString('en-GB', { month:'long', year:'numeric' });
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(c);
+  });
+  el.innerHTML = Object.entries(groups).map(([month, items]) => `
+    <div style="margin-bottom:20px">
+      <div style="font-family:var(--mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:10px">${month}</div>
+      ${items.map(c => `
+        <div class="history-item">
+          <div class="history-text">${escHtml(c.text)}</div>
+          <div class="history-meta">
+            <span class="history-date">✓ ${c.completedDate || fmt(c.completedAt)}</span>
+            ${c.remark ? `<span class="history-remark">${escHtml(c.remark)}</span>` : ''}
+          </div>
+        </div>`).join('')}
+    </div>`).join('');
+}
+
+// ---- NOTES ----
+let notesSaveTimer;
+window.saveNotes = async function() {
+  const content = document.getElementById('notes-area').value;
+  await setDoc(doc(db,'config','notes'), { content, savedAt: serverTimestamp() });
+  document.getElementById('notes-status').textContent = 'Saved ✓';
+  setTimeout(() => document.getElementById('notes-status').textContent = '', 2000);
+};
+
+// Auto-save notes after 2s of inactivity
+document.getElementById('notes-area').addEventListener('input', () => {
+  document.getElementById('notes-status').textContent = 'Unsaved...';
+  clearTimeout(notesSaveTimer);
+  notesSaveTimer = setTimeout(saveNotes, 2000);
+});
+
+// ---- UI ----
+window.switchTab = function(tab, el) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('view-' + tab).classList.add('active');
+  el.classList.add('active');
+};
+
+// Close modal on bg click
+document.getElementById('modal-bg').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+
+let toastTimer;
+window.showToast = function(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+};
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>
