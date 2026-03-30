@@ -60,6 +60,7 @@
   .when-btn { flex: 1; padding: 7px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-family: var(--mono); font-size: 11px; letter-spacing: 0.5px; text-transform: uppercase; cursor: pointer; text-align: center; color: var(--muted); background: var(--surface2); transition: all 0.15s; }
   .when-btn.sel-today { background: var(--accent-light); color: var(--accent); border-color: var(--accent-dim); }
   .when-btn.sel-next { background: var(--blue-dim); color: #7aaad4; border-color: #2a4a6e; }
+  .when-btn.sel-house { background: #1e2e1e; color: #6abf6a; border-color: #3a6e3a; }
 
   /* TASK SECTIONS */
   .section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
@@ -161,6 +162,7 @@
       <div class="when-toggle">
         <button class="when-btn sel-today" id="when-today" onclick="selectWhen('today')">Current</button>
         <button class="when-btn" id="when-next" onclick="selectWhen('next')">Future</button>
+        <button class="when-btn" id="when-house" onclick="selectWhen('house')">🏠 בית</button>
       </div>
     </div>
 
@@ -175,6 +177,12 @@
       <span class="section-count" id="count-next">0 tasks</span>
     </div>
     <div class="tasks" id="tasks-next"></div>
+
+    <div class="section-head">
+      <span class="section-label">🏠 בית</span>
+      <span class="section-count" id="count-house">0 tasks</span>
+    </div>
+    <div class="tasks" id="tasks-house"></div>
   </div>
 
   <!-- HISTORY -->
@@ -252,6 +260,7 @@ window.selectWhen = function(when) {
   selectedWhen = when;
   document.getElementById('when-today').className = 'when-btn' + (when==='today' ? ' sel-today' : '');
   document.getElementById('when-next').className  = 'when-btn' + (when==='next'  ? ' sel-next'  : '');
+  document.getElementById('when-house').className = 'when-btn' + (when==='house' ? ' sel-house' : '');
 };
 
 window.addTask = async function() {
@@ -301,7 +310,8 @@ window.deleteTask = async function(id) {
 
 window.moveTask = async function(id, to) {
   await updateDoc(doc(db,'tasks', id), { when: to });
-  showToast(`Moved to ${to === 'today' ? 'Current' : 'Future'}`);
+  const labels = { today: 'Current', next: 'Future', house: '🏠 בית' };
+  showToast(`Moved to ${labels[to]}`);
 };
 
 function fmt(ts) {
@@ -312,9 +322,11 @@ function fmt(ts) {
 function renderTasks() {
   const today = tasks.filter(t => t.when === 'today');
   const next  = tasks.filter(t => t.when === 'next');
+  const house = tasks.filter(t => t.when === 'house');
 
   document.getElementById('count-today').textContent = today.length + ' task' + (today.length!==1?'s':'');
   document.getElementById('count-next').textContent  = next.length  + ' task' + (next.length!==1?'s':'');
+  document.getElementById('count-house').textContent = house.length + ' task' + (house.length!==1?'s':'');
 
   document.getElementById('tasks-today').innerHTML = today.length
     ? today.map(t => renderTask(t)).join('')
@@ -323,11 +335,15 @@ function renderTasks() {
   document.getElementById('tasks-next').innerHTML = next.length
     ? next.map(t => renderTask(t)).join('')
     : `<div class="empty"><div class="empty-icon">◦</div><p>No future tasks</p></div>`;
+
+  document.getElementById('tasks-house').innerHTML = house.length
+    ? house.map(t => renderTask(t)).join('')
+    : `<div class="empty"><div class="empty-icon">🏠</div><p>No house tasks</p></div>`;
 }
 
 function renderTask(t) {
-  const moveLabel = t.when === 'today' ? '→ Future' : '→ Current';
-  const moveTo    = t.when === 'today' ? 'next'   : 'today';
+  const moveLabel = t.when === 'today' ? '→ Future' : t.when === 'next' ? '→ Current' : '→ Current';
+  const moveTo    = t.when === 'today' ? 'next'    : 'today';
   return `<div class="task" id="task-${t.id}">
     <button class="check" onclick="startComplete('${t.id}')"></button>
     <div class="task-body">
