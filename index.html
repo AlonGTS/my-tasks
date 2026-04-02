@@ -132,6 +132,16 @@
   /* MOVE BTN tooltip */
   .move-tip { font-size: 10px; }
 
+  /* RECURRING */
+  .rec-item { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+  .rec-icon { font-size: 16px; flex-shrink: 0; color: var(--accent); }
+  .rec-body { flex: 1; min-width: 0; }
+  .rec-text { font-size: 14px; font-weight: 500; }
+  .rec-meta { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 3px; }
+  .rec-next { font-family: var(--mono); font-size: 10px; color: var(--accent-dim); margin-top: 2px; }
+  .rec-del { background: none; border: none; cursor: pointer; color: var(--muted2); font-size: 14px; padding: 4px; opacity: 0; transition: opacity 0.15s; }
+  .rec-item:hover .rec-del { opacity: 1; }
+
   /* TOAST */
   .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(60px); background: var(--surface3); border: 1px solid var(--border2); color: var(--text); padding: 9px 18px; border-radius: 30px; font-size: 13px; transition: transform 0.3s ease; z-index: 999; white-space: nowrap; }
   .toast.show { transform: translateX(-50%) translateY(0); }
@@ -147,6 +157,7 @@
 <div class="tabs">
   <button class="tab active" onclick="switchTab('tasks',this)">Tasks</button>
   <button class="tab" onclick="switchTab('history',this)">Completed</button>
+  <button class="tab" onclick="switchTab('recurring',this)">↻ Recurring</button>
   <button class="tab" onclick="switchTab('notes',this)">Notes</button>
 </div>
 
@@ -188,6 +199,38 @@
   <!-- HISTORY -->
   <div id="view-history" class="view">
     <div id="history-list"></div>
+  </div>
+
+  <!-- RECURRING -->
+  <div id="view-recurring" class="view">
+    <div class="add-box">
+      <div class="add-row">
+        <input class="add-input" id="rec-input" placeholder="e.g. Pay tax..." onkeydown="if(event.key==='Enter')addRecurring()">
+        <button class="add-btn" onclick="addRecurring()">Add</button>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+        <select class="add-input" id="rec-freq" style="flex:1;min-width:100px" onchange="updateRecurringUI()">
+          <option value="monthly">Monthly</option>
+          <option value="weekly">Weekly</option>
+        </select>
+        <select class="add-input" id="rec-day" style="flex:1;min-width:100px"></select>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <select class="add-input" id="rec-section" style="flex:1">
+          <option value="today">→ Current</option>
+          <option value="next">→ Future</option>
+          <option value="house">→ 🏠 בית</option>
+        </select>
+      </div>
+    </div>
+    <div class="section-head">
+      <span class="section-label">Recurring tasks</span>
+      <span class="section-count" id="count-recurring">0</span>
+    </div>
+    <div id="recurring-list"></div>
+    <div style="margin-top:16px;font-family:var(--mono);font-size:10px;color:var(--muted2);line-height:1.6">
+      Each recurring task auto-appears in your task list on its due date and stays until you complete it.
+    </div>
   </div>
 
   <!-- NOTES -->
@@ -420,6 +463,133 @@ window.showToast = function(msg) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
 };
+
+// ---- RECURRING ----
+let recurringTasks = [];
+
+onSnapshot(query(collection(db,'recurring'), orderBy('createdAt','asc')), snap => {
+  recurringTasks = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  renderRecurring();
+  checkAndSpawnRecurring();
+});
+
+window.updateRecurringUI = function() {
+  const freq = document.getElementById('rec-freq').value;
+  const dayEl = document.getElementById('rec-day');
+  dayEl.innerHTML = '';
+  if (freq === 'monthly') {
+    for (let i = 1; i <= 28; i++) {
+      dayEl.innerHTML += `<option value="${i}">${i}${i===1?'st':i===2?'nd':i===3?'rd':'th'} of month</option>`;
+    }
+  } else {
+    const days = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+    days.forEach((d,i) => { dayEl.innerHTML += `<option value="${i+1}">${d}</option>`; });
+  }
+};
+updateRecurringUI();
+
+window.addRecurring = async function() {
+  const text = document.getElementById('rec-input').value.trim();
+  if (!text) return;
+  const freq = document.getElementById('rec-freq').value;
+  const day  = parseInt(document.getElementById('rec-day').value);
+  const section = document.getElementById('rec-section').value;
+  document.getElementById('rec-input').value = '';
+  await addDoc(collection(db,'recurring'), {
+    text, freq, day, section,
+    lastSpawned: null,
+    createdAt: serverTimestamp()
+  });
+  showToast('Recurring task added ↻');
+};
+
+window.deleteRecurring = async function(id) {
+  await deleteDoc(doc(db,'recurring', id));
+  showToast('Recurring task removed');
+};
+
+function getNextDueDate(r) {
+  const now = new Date();
+  const d = new Date(now);
+  if (r.freq === 'monthly') {
+    d.setDate(r.day);
+    if (d < now) { d.setMonth(d.getMonth() + 1); d.setDate(r.day); }
+  } else {
+    // weekly: day 1=Mon ... 7=Sun
+    const cur = d.getDay() || 7; // convert Sun=0 to 7
+    let diff = r.day - cur;
+    if (diff <= 0) diff += 7;
+    d.setDate(d.getDate() + diff);
+  }
+  return d;
+}
+
+function isDueToday(r) {
+  const now = new Date();
+  if (r.freq === 'monthly') {
+    return now.getDate() === r.day;
+  } else {
+    const cur = now.getDay() || 7;
+    return cur === r.day;
+  }
+}
+
+function alreadySpawnedThisPeriod(r) {
+  if (!r.lastSpawned) return false;
+  const last = r.lastSpawned.toDate ? r.lastSpawned.toDate() : new Date(r.lastSpawned);
+  const now = new Date();
+  if (r.freq === 'monthly') {
+    return last.getMonth() === now.getMonth() && last.getFullYear() === now.getFullYear();
+  } else {
+    // same ISO week
+    const weekOf = d => { const t = new Date(d); t.setHours(0,0,0,0); t.setDate(t.getDate()+3-(t.getDay()+6)%7); const w = new Date(t.getFullYear(),0,4); return 1+Math.round(((t-w)/86400000-3+(w.getDay()+6)%7)/7); };
+    return weekOf(last) === weekOf(now) && last.getFullYear() === now.getFullYear();
+  }
+}
+
+async function checkAndSpawnRecurring() {
+  for (const r of recurringTasks) {
+    if (isDueToday(r) && !alreadySpawnedThisPeriod(r)) {
+      // Check not already in tasks
+      const alreadyExists = tasks.some(t => t.recurringId === r.id);
+      if (!alreadyExists) {
+        await addDoc(collection(db,'tasks'), {
+          text: r.text,
+          when: r.section,
+          recurringId: r.id,
+          createdAt: serverTimestamp()
+        });
+        await updateDoc(doc(db,'recurring', r.id), { lastSpawned: serverTimestamp() });
+      }
+    }
+  }
+}
+
+function renderRecurring() {
+  const el = document.getElementById('recurring-list');
+  document.getElementById('count-recurring').textContent = recurringTasks.length;
+  if (!recurringTasks.length) {
+    el.innerHTML = `<div class="empty"><div class="empty-icon">↻</div><p>No recurring tasks yet</p></div>`;
+    return;
+  }
+  el.innerHTML = recurringTasks.map(r => {
+    const freqLabel = r.freq === 'monthly'
+      ? `Monthly on the ${r.day}${r.day===1?'st':r.day===2?'nd':r.day===3?'rd':'th'}`
+      : `Weekly every ${ ['','Mon','Tue','Wed','Thu','Fri','Sat','Sun'][r.day] }`;
+    const next = getNextDueDate(r);
+    const nextLabel = next.toLocaleDateString('en-GB', { day:'numeric', month:'short' });
+    const sectionLabel = { today:'Current', next:'Future', house:'🏠 בית' }[r.section] || 'Current';
+    return `<div class="rec-item">
+      <span class="rec-icon">↻</span>
+      <div class="rec-body">
+        <div class="rec-text">${escHtml(r.text)}</div>
+        <div class="rec-meta">${freqLabel} → ${sectionLabel}</div>
+        <div class="rec-next">Next: ${nextLabel}</div>
+      </div>
+      <button class="rec-del" onclick="deleteRecurring('${r.id}')">✕</button>
+    </div>`;
+  }).join('');
+}
 
 function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
