@@ -117,6 +117,16 @@
   .notes-save { background: var(--accent); color: var(--bg); border: none; border-radius: var(--radius-sm); padding: 8px 18px; font-family: var(--sans); font-size: 13px; font-weight: 500; cursor: pointer; transition: opacity 0.15s; }
   .notes-save:hover { opacity: 0.85; }
 
+  /* NOTES */
+  .note-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-bottom: 8px; transition: border 0.15s; }
+  .note-card:hover { border-color: var(--border2); }
+  .note-card-title { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+  .note-card-body { font-size: 13px; color: var(--muted); line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+  .note-card-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
+  .note-card-date { font-family: var(--mono); font-size: 10px; color: var(--muted2); }
+  .note-card-actions { display: flex; gap: 4px; opacity: 0; transition: opacity 0.15s; }
+  .note-card:hover .note-card-actions { opacity: 1; }
+
   /* HISTORY */
   .history-item { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 8px; }
   .history-text { font-size: 14px; line-height: 1.4; margin-bottom: 6px; }
@@ -235,11 +245,18 @@
 
   <!-- NOTES -->
   <div id="view-notes" class="view">
-    <textarea class="notes-area" id="notes-area" placeholder="Write anything here — ideas, reminders, quick notes..."></textarea>
-    <div class="notes-save-row">
-      <span class="notes-status" id="notes-status"></span>
-      <button class="notes-save" onclick="saveNotes()">Save</button>
+    <div class="add-box">
+      <div class="add-row">
+        <input class="add-input" id="note-title-input" placeholder="Note title (optional)..." style="margin-bottom:8px">
+      </div>
+      <textarea class="add-input" id="note-body-input" rows="3" placeholder="Write your note..." style="resize:none;width:100%;margin-bottom:8px"></textarea>
+      <button class="add-btn" style="width:100%" onclick="saveNewNote()">+ Add Note</button>
     </div>
+    <div class="section-head">
+      <span class="section-label">Notes</span>
+      <span class="section-count" id="count-notes">0</span>
+    </div>
+    <div id="notes-list"></div>
   </div>
 
 </div>
@@ -258,7 +275,18 @@
   </div>
 </div>
 
-<div class="toast" id="toast"></div>
+<!-- NOTE EDIT MODAL -->
+<div class="modal-bg" id="note-modal-bg">
+  <div class="modal">
+    <div class="modal-title">Edit Note</div>
+    <input class="modal-input" id="note-edit-title" placeholder="Title (optional)..." style="margin-bottom:10px">
+    <textarea class="modal-input" id="note-edit-body" rows="5" placeholder="Note content..."></textarea>
+    <div class="modal-btns">
+      <button class="modal-cancel" onclick="closeNoteModal()">Cancel</button>
+      <button class="modal-confirm" onclick="confirmEditNote()">Save</button>
+    </div>
+  </div>
+</div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
@@ -428,20 +456,77 @@ function renderHistory(completed) {
 }
 
 // ---- NOTES ----
-let notesSaveTimer;
-window.saveNotes = async function() {
-  const content = document.getElementById('notes-area').value;
-  await setDoc(doc(db,'config','notes'), { content, savedAt: serverTimestamp() });
-  document.getElementById('notes-status').textContent = 'Saved ✓';
-  setTimeout(() => document.getElementById('notes-status').textContent = '', 2000);
+let notes = [], editingNoteId = null;
+
+onSnapshot(query(collection(db,'notes'), orderBy('createdAt','desc')), snap => {
+  notes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  renderNotes();
+});
+
+window.saveNewNote = async function() {
+  const title = document.getElementById('note-title-input').value.trim();
+  const body  = document.getElementById('note-body-input').value.trim();
+  if (!body && !title) return;
+  document.getElementById('note-title-input').value = '';
+  document.getElementById('note-body-input').value = '';
+  await addDoc(collection(db,'notes'), { title, body, createdAt: serverTimestamp() });
+  showToast('Note saved');
 };
 
-// Auto-save notes after 2s of inactivity
-document.getElementById('notes-area').addEventListener('input', () => {
-  document.getElementById('notes-status').textContent = 'Unsaved...';
-  clearTimeout(notesSaveTimer);
-  notesSaveTimer = setTimeout(saveNotes, 2000);
+window.deleteNote = async function(id) {
+  await deleteDoc(doc(db,'notes', id));
+  showToast('Note deleted');
+};
+
+window.openEditNote = function(id) {
+  const note = notes.find(n => n.id === id); if (!note) return;
+  editingNoteId = id;
+  document.getElementById('note-edit-title').value = note.title || '';
+  document.getElementById('note-edit-body').value  = note.body  || '';
+  document.getElementById('note-modal-bg').classList.add('open');
+  setTimeout(() => document.getElementById('note-edit-body').focus(), 100);
+};
+
+window.closeNoteModal = function() {
+  document.getElementById('note-modal-bg').classList.remove('open');
+  editingNoteId = null;
+};
+
+window.confirmEditNote = async function() {
+  if (!editingNoteId) return;
+  const title = document.getElementById('note-edit-title').value.trim();
+  const body  = document.getElementById('note-edit-body').value.trim();
+  await updateDoc(doc(db,'notes', editingNoteId), { title, body });
+  closeNoteModal();
+  showToast('Note updated');
+};
+
+document.getElementById('note-modal-bg').addEventListener('click', function(e) {
+  if (e.target === this) closeNoteModal();
 });
+
+function renderNotes() {
+  const el = document.getElementById('notes-list');
+  document.getElementById('count-notes').textContent = notes.length;
+  if (!notes.length) {
+    el.innerHTML = `<div class="empty"><div class="empty-icon">📝</div><p>No notes yet</p></div>`;
+    return;
+  }
+  el.innerHTML = notes.map(n => {
+    const date = n.createdAt ? n.createdAt.toDate().toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' }) : '';
+    return `<div class="note-card">
+      ${n.title ? `<div class="note-card-title">${escHtml(n.title)}</div>` : ''}
+      <div class="note-card-body">${escHtml(n.body || '')}</div>
+      <div class="note-card-footer">
+        <span class="note-card-date">${date}</span>
+        <div class="note-card-actions">
+          <button class="act-btn" onclick="openEditNote('${n.id}')" title="Edit">✏️</button>
+          <button class="act-btn" onclick="deleteNote('${n.id}')" title="Delete">✕</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
 
 // ---- UI ----
 window.switchTab = function(tab, el) {
