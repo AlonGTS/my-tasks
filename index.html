@@ -120,8 +120,8 @@
   /* NOTES */
   .note-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-bottom: 8px; transition: border 0.15s; }
   .note-card:hover { border-color: var(--border2); }
-  .note-card-title { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
-  .note-card-body { font-size: 13px; color: var(--muted); line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+  .note-card-title { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 4px; direction: rtl; text-align: right; }
+  .note-card-body { font-size: 13px; color: var(--muted); line-height: 1.6; white-space: pre-wrap; word-break: break-word; direction: rtl; text-align: right; }
   .note-card-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
   .note-card-date { font-family: var(--mono); font-size: 10px; color: var(--muted2); }
   .note-card-actions { display: flex; gap: 4px; opacity: 0; transition: opacity 0.15s; }
@@ -249,7 +249,7 @@
       <div class="add-row">
         <input class="add-input" id="note-title-input" placeholder="Note title (optional)..." style="margin-bottom:8px">
       </div>
-      <textarea class="add-input" id="note-body-input" rows="3" placeholder="Write your note..." style="resize:none;width:100%;margin-bottom:8px"></textarea>
+      <textarea class="add-input" id="note-body-input" dir="rtl" rows="3" placeholder="Write your note..." style="resize:none;width:100%;margin-bottom:8px"></textarea>
       <button class="add-btn" style="width:100%" onclick="saveNewNote()">+ Add Note</button>
     </div>
     <div class="section-head">
