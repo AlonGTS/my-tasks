@@ -411,13 +411,17 @@ window.deleteTask = async function(id) {
 window.moveTaskOrder = async function(id, dir) {
   const task = tasks.find(t => t.id === id); if (!task) return;
   const section = tasks.filter(t => t.when === task.when).sort((a,b) => (a.order||0)-(b.order||0));
+  // First, normalize orders so every task has a unique order value
+  const updates = section.map((t, i) => updateDoc(doc(db,'tasks', t.id), { order: i * 10 }));
+  await Promise.all(updates);
+  // Now find idx and swap
   const idx = section.findIndex(t => t.id === id);
   const swapIdx = dir === 'up' ? idx - 1 : idx + 1;
   if (swapIdx < 0 || swapIdx >= section.length) return;
-  const swapTask = section[swapIdx];
-  const orderA = task.order || 0, orderB = swapTask.order || 0;
+  const orderA = idx * 10;
+  const orderB = swapIdx * 10;
   await updateDoc(doc(db,'tasks', id), { order: orderB });
-  await updateDoc(doc(db,'tasks', swapTask.id), { order: orderA });
+  await updateDoc(doc(db,'tasks', section[swapIdx].id), { order: orderA });
 };
 
 window.addSubtask = async function(taskId) {
