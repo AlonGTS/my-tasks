@@ -446,6 +446,8 @@ window.toggleSubtaskSection = function(taskId) {
   const el = document.getElementById('subs-' + taskId);
   if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
 };
+
+window.moveTask = async function(id, to) {
   await updateDoc(doc(db,'tasks', id), { when: to });
   const labels = { today: 'Current', next: 'Future', house: '🏠 בית' };
   showToast(`Moved to ${labels[to]}`);
