@@ -120,12 +120,38 @@
   /* NOTES */
   .note-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-bottom: 8px; transition: border 0.15s; }
   .note-card:hover { border-color: var(--border2); }
-  .note-card-title { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 4px; direction: rtl; text-align: right; }
-  .note-card-body { font-size: 13px; color: var(--muted); line-height: 1.6; white-space: pre-wrap; word-break: break-word; direction: rtl; text-align: right; }
+  .note-card-title { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+  .note-card-body { font-size: 13px; color: var(--muted); line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
   .note-card-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
   .note-card-date { font-family: var(--mono); font-size: 10px; color: var(--muted2); }
   .note-card-actions { display: flex; gap: 4px; opacity: 0; transition: opacity 0.15s; }
   .note-card:hover .note-card-actions { opacity: 1; }
+
+  /* SUBTASKS */
+  .subtasks { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; padding-left: 28px; }
+  .subtask { display: flex; align-items: center; gap: 8px; }
+  .sub-check { width: 15px; height: 15px; border-radius: 3px; border: 1.5px solid var(--border2); background: transparent; cursor: pointer; flex-shrink: 0; position: relative; transition: all 0.15s; }
+  .sub-check.checked { background: var(--green); border-color: var(--green); }
+  .sub-check.checked::after { content:''; position:absolute; top:2px; left:4px; width:3px; height:6px; border:1.5px solid white; border-top:none; border-left:none; transform:rotate(45deg); }
+  .sub-text { font-size: 12px; color: var(--muted); flex: 1; }
+  .sub-text.done { text-decoration: line-through; color: var(--muted2); }
+  .sub-del { background: none; border: none; cursor: pointer; color: var(--muted2); font-size: 11px; padding: 2px 4px; opacity: 0; transition: opacity 0.15s; }
+  .subtask:hover .sub-del { opacity: 1; }
+  .add-subtask-row { display: flex; gap: 6px; margin-top: 6px; padding-left: 28px; }
+  .sub-input { flex: 1; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 5px 9px; font-family: var(--sans); font-size: 12px; color: var(--text); outline: none; }
+  .sub-input::placeholder { color: var(--muted2); }
+  .sub-input:focus { border-color: var(--accent-dim); }
+  .sub-add-btn { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 5px 10px; font-size: 12px; color: var(--muted); cursor: pointer; white-space: nowrap; }
+  .sub-add-btn:hover { color: var(--text); }
+  .subtask-toggle { font-family: var(--mono); font-size: 10px; color: var(--muted2); cursor: pointer; margin-top: 5px; padding-left: 28px; display: block; }
+  .subtask-toggle:hover { color: var(--muted); }
+  .subtask-progress { font-family: var(--mono); font-size: 10px; color: var(--accent-dim); margin-top: 3px; }
+  /* ORDER BUTTONS */
+  .order-btns { display: flex; flex-direction: column; gap: 2px; flex-shrink: 0; opacity: 0; transition: opacity 0.15s; }
+  .task:hover .order-btns { opacity: 1; }
+  .ord-btn { background: none; border: none; cursor: pointer; color: var(--muted2); font-size: 10px; padding: 1px 3px; line-height: 1; border-radius: 3px; }
+  .ord-btn:hover { background: var(--surface2); color: var(--text); }
+  .ord-btn:disabled { opacity: 0.2; cursor: default; }
 
   /* HISTORY */
   .history-item { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 8px; }
@@ -249,7 +275,7 @@
       <div class="add-row">
         <input class="add-input" id="note-title-input" placeholder="Note title (optional)..." style="margin-bottom:8px">
       </div>
-      <textarea class="add-input" id="note-body-input" dir="rtl" rows="3" placeholder="Write your note..." style="resize:none;width:100%;margin-bottom:8px"></textarea>
+      <textarea class="add-input" id="note-body-input" rows="3" placeholder="Write your note..." style="resize:none;width:100%;margin-bottom:8px"></textarea>
       <button class="add-btn" style="width:100%" onclick="saveNewNote()">+ Add Note</button>
     </div>
     <div class="section-head">
@@ -339,7 +365,10 @@ window.addTask = async function() {
   const text = input.value.trim();
   if (!text) return;
   input.value = '';
-  await addDoc(collection(db,'tasks'), { text, when: selectedWhen, createdAt: serverTimestamp() });
+  // Find max order in current section
+  const sectionTasks = tasks.filter(t => t.when === selectedWhen);
+  const maxOrder = sectionTasks.length ? Math.max(...sectionTasks.map(t => t.order || 0)) : 0;
+  await addDoc(collection(db,'tasks'), { text, when: selectedWhen, order: maxOrder + 1, subtasks: [], createdAt: serverTimestamp() });
   showToast('Task added');
 };
 
@@ -379,7 +408,44 @@ window.deleteTask = async function(id) {
   showToast('Task removed');
 };
 
-window.moveTask = async function(id, to) {
+window.moveTaskOrder = async function(id, dir) {
+  const task = tasks.find(t => t.id === id); if (!task) return;
+  const section = tasks.filter(t => t.when === task.when).sort((a,b) => (a.order||0)-(b.order||0));
+  const idx = section.findIndex(t => t.id === id);
+  const swapIdx = dir === 'up' ? idx - 1 : idx + 1;
+  if (swapIdx < 0 || swapIdx >= section.length) return;
+  const swapTask = section[swapIdx];
+  const orderA = task.order || 0, orderB = swapTask.order || 0;
+  await updateDoc(doc(db,'tasks', id), { order: orderB });
+  await updateDoc(doc(db,'tasks', swapTask.id), { order: orderA });
+};
+
+window.addSubtask = async function(taskId) {
+  const input = document.getElementById('sub-input-' + taskId);
+  const text = input.value.trim(); if (!text) return;
+  input.value = '';
+  const task = tasks.find(t => t.id === taskId); if (!task) return;
+  const subs = task.subtasks || [];
+  subs.push({ id: Date.now().toString(), text, done: false });
+  await updateDoc(doc(db,'tasks', taskId), { subtasks: subs });
+};
+
+window.toggleSubtask = async function(taskId, subId) {
+  const task = tasks.find(t => t.id === taskId); if (!task) return;
+  const subs = (task.subtasks || []).map(s => s.id === subId ? {...s, done: !s.done} : s);
+  await updateDoc(doc(db,'tasks', taskId), { subtasks: subs });
+};
+
+window.deleteSubtask = async function(taskId, subId) {
+  const task = tasks.find(t => t.id === taskId); if (!task) return;
+  const subs = (task.subtasks || []).filter(s => s.id !== subId);
+  await updateDoc(doc(db,'tasks', taskId), { subtasks: subs });
+};
+
+window.toggleSubtaskSection = function(taskId) {
+  const el = document.getElementById('subs-' + taskId);
+  if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+};
   await updateDoc(doc(db,'tasks', id), { when: to });
   const labels = { today: 'Current', next: 'Future', house: '🏠 בית' };
   showToast(`Moved to ${labels[to]}`);
@@ -391,34 +457,57 @@ function fmt(ts) {
 }
 
 function renderTasks() {
-  const today = tasks.filter(t => t.when === 'today');
-  const next  = tasks.filter(t => t.when === 'next');
-  const house = tasks.filter(t => t.when === 'house');
+  const sortByOrder = arr => [...arr].sort((a,b) => (a.order||0)-(b.order||0));
+  const today = sortByOrder(tasks.filter(t => t.when === 'today'));
+  const next  = sortByOrder(tasks.filter(t => t.when === 'next'));
+  const house = sortByOrder(tasks.filter(t => t.when === 'house'));
 
   document.getElementById('count-today').textContent = today.length + ' task' + (today.length!==1?'s':'');
   document.getElementById('count-next').textContent  = next.length  + ' task' + (next.length!==1?'s':'');
   document.getElementById('count-house').textContent = house.length + ' task' + (house.length!==1?'s':'');
 
   document.getElementById('tasks-today').innerHTML = today.length
-    ? today.map(t => renderTask(t)).join('')
+    ? today.map((t,i) => renderTask(t, i, today.length)).join('')
     : `<div class="empty"><div class="empty-icon">◦</div><p>No current tasks</p></div>`;
 
   document.getElementById('tasks-next').innerHTML = next.length
-    ? next.map(t => renderTask(t)).join('')
+    ? next.map((t,i) => renderTask(t, i, next.length)).join('')
     : `<div class="empty"><div class="empty-icon">◦</div><p>No future tasks</p></div>`;
 
   document.getElementById('tasks-house').innerHTML = house.length
-    ? house.map(t => renderTask(t)).join('')
+    ? house.map((t,i) => renderTask(t, i, house.length)).join('')
     : `<div class="empty"><div class="empty-icon">🏠</div><p>No house tasks</p></div>`;
 }
 
-function renderTask(t) {
+function renderTask(t, idx, total) {
   const moveLabel = t.when === 'today' ? '→ Future' : t.when === 'next' ? '→ Current' : '→ Current';
-  const moveTo    = t.when === 'today' ? 'next'    : 'today';
+  const moveTo    = t.when === 'today' ? 'next' : 'today';
+  const subs = t.subtasks || [];
+  const doneSubs = subs.filter(s => s.done).length;
+  const subProgress = subs.length ? `<span class="subtask-progress">${doneSubs}/${subs.length} subtasks</span>` : '';
+  const subsHtml = subs.map(s => `
+    <div class="subtask">
+      <button class="sub-check ${s.done?'checked':''}" onclick="toggleSubtask('${t.id}','${s.id}')"></button>
+      <span class="sub-text ${s.done?'done':''}">${escHtml(s.text)}</span>
+      <button class="sub-del" onclick="deleteSubtask('${t.id}','${s.id}')">✕</button>
+    </div>`).join('');
+
   return `<div class="task" id="task-${t.id}">
+    <div class="order-btns">
+      <button class="ord-btn" onclick="moveTaskOrder('${t.id}','up')" ${idx===0?'disabled':''}>▲</button>
+      <button class="ord-btn" onclick="moveTaskOrder('${t.id}','down')" ${idx===total-1?'disabled':''}>▼</button>
+    </div>
     <button class="check" onclick="startComplete('${t.id}')"></button>
     <div class="task-body">
       <div class="task-text">${escHtml(t.text)}</div>
+      ${subProgress}
+      <div id="subs-${t.id}">
+        ${subs.length ? `<div class="subtasks">${subsHtml}</div>` : ''}
+        <div class="add-subtask-row">
+          <input class="sub-input" id="sub-input-${t.id}" placeholder="Add subtask..." onkeydown="if(event.key==='Enter')addSubtask('${t.id}')">
+          <button class="sub-add-btn" onclick="addSubtask('${t.id}')">+ Sub</button>
+        </div>
+      </div>
     </div>
     <div class="task-actions">
       <button class="act-btn move" onclick="moveTask('${t.id}','${moveTo}')" title="Move">${moveLabel}</button>
