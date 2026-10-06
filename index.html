@@ -56,6 +56,13 @@
   .add-input:focus { border-color: var(--accent-dim); }
   .add-btn { background: var(--accent); color: var(--bg); border: none; border-radius: var(--radius-sm); padding: 9px 16px; font-family: var(--sans); font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; transition: opacity 0.15s; }
   .add-btn:hover { opacity: 0.85; }
+  .mic-btn { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm); width: 40px; flex-shrink: 0; cursor: pointer; color: var(--muted); display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+  .mic-btn:hover { color: var(--text); border-color: var(--border2); }
+  .mic-btn svg { width: 16px; height: 16px; }
+  .mic-btn.listening { background: #3a1a16; border-color: var(--red); color: #ff8a78; animation: micPulse 1.2s ease-in-out infinite; }
+  @keyframes micPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(192,80,64,0.5); } 50% { box-shadow: 0 0 0 5px rgba(192,80,64,0); } }
+  .lang-btn { background: none; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0 8px; flex-shrink: 0; cursor: pointer; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .lang-btn:hover { color: var(--text); }
   .when-toggle { display: flex; gap: 6px; }
   .when-btn { flex: 1; padding: 7px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-family: var(--mono); font-size: 11px; letter-spacing: 0.5px; text-transform: uppercase; cursor: pointer; text-align: center; color: var(--muted); background: var(--surface2); transition: all 0.15s; }
   .when-btn.sel-today { background: var(--accent-light); color: var(--accent); border-color: var(--accent-dim); }
@@ -203,7 +210,11 @@
   <div id="view-tasks" class="view active">
     <div class="add-box">
       <div class="add-row">
-        <input class="add-input" id="task-input" placeholder="New task..." onkeydown="if(event.key==='Enter')addTask()">
+        <input class="add-input" id="task-input" dir="auto" placeholder="New task..." onkeydown="if(event.key==='Enter')addTask()">
+        <button class="lang-btn" id="voice-lang" onclick="toggleVoiceLang()" title="Voice language" hidden>EN</button>
+        <button class="mic-btn" id="mic-btn" onclick="toggleVoice()" title="Add task by voice" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1"/><line x1="12" y1="18" x2="12" y2="22"/></svg>
+        </button>
         <button class="add-btn" onclick="addTask()">Add</button>
       </div>
       <div class="when-toggle">
@@ -286,6 +297,8 @@
   </div>
 
 </div>
+
+<div class="toast" id="toast"></div>
 
 <!-- COMPLETE MODAL -->
 <div class="modal-bg" id="modal-bg">
@@ -370,6 +383,49 @@ window.addTask = async function() {
   const maxOrder = sectionTasks.length ? Math.max(...sectionTasks.map(t => t.order || 0)) : 0;
   await addDoc(collection(db,'tasks'), { text, when: selectedWhen, order: maxOrder + 1, subtasks: [], createdAt: serverTimestamp() });
   showToast('Task added');
+};
+
+// ---- VOICE INPUT ----
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition = null, voiceLang = 'en-US';
+try { voiceLang = localStorage.getItem('voiceLang') || 'en-US'; } catch {}
+
+if (SpeechRecognition) {
+  document.getElementById('mic-btn').hidden = false;
+  document.getElementById('voice-lang').hidden = false;
+  document.getElementById('voice-lang').textContent = voiceLang === 'he-IL' ? 'עב' : 'EN';
+}
+
+window.toggleVoiceLang = function() {
+  voiceLang = voiceLang === 'he-IL' ? 'en-US' : 'he-IL';
+  try { localStorage.setItem('voiceLang', voiceLang); } catch {}
+  document.getElementById('voice-lang').textContent = voiceLang === 'he-IL' ? 'עב' : 'EN';
+};
+
+window.toggleVoice = function() {
+  if (recognition) { recognition.stop(); return; }
+  const input = document.getElementById('task-input');
+  const btn = document.getElementById('mic-btn');
+  const prefix = input.value.trim() ? input.value.trim() + ' ' : '';
+  recognition = new SpeechRecognition();
+  recognition.lang = voiceLang;
+  recognition.interimResults = true;
+  recognition.continuous = false;
+  recognition.onresult = e => {
+    const transcript = Array.from(e.results).map(r => r[0].transcript).join('');
+    input.value = prefix + transcript;
+  };
+  recognition.onerror = e => {
+    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') showToast('Microphone access denied');
+    else if (e.error !== 'no-speech' && e.error !== 'aborted') showToast('Voice error: ' + e.error);
+  };
+  recognition.onend = () => {
+    recognition = null;
+    btn.classList.remove('listening');
+    input.focus();
+  };
+  btn.classList.add('listening');
+  recognition.start();
 };
 
 window.startComplete = function(id) {
