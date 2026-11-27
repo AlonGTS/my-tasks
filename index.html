@@ -385,6 +385,26 @@ window.addTask = async function() {
   showToast('Task added');
 };
 
+// ---- GOOGLE CALENDAR ----
+// Opens Google Calendar's event form pre-filled with the task as an all-day event on today's date.
+// No sign-in or API key needed; the user saves the event in their own calendar.
+window.addToCalendar = function(id) {
+  const task = tasks.find(t => t.id === id);
+  if (!task) return;
+  const pad = n => String(n).padStart(2, '0');
+  const ymd = d => `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}`;
+  const start = new Date();
+  const end = new Date(start); end.setDate(end.getDate() + 1);
+  const details = (task.subtasks || []).map(s => `${s.done ? '[x]' : '[ ]'} ${s.text}`).join('\n');
+  const params = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: task.text,
+    dates: `${ymd(start)}/${ymd(end)}`,
+    details,
+  });
+  window.open(`https://calendar.google.com/calendar/render?${params.toString()}`, '_blank', 'noopener');
+};
+
 // ---- VOICE INPUT ----
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognition = null, voiceLang = 'en-US';
@@ -575,6 +595,7 @@ function renderTask(t, idx, total) {
     </div>
     <div class="task-actions">
       <button class="act-btn move" onclick="moveTask('${t.id}','${moveTo}')" title="Move">${moveLabel}</button>
+      <button class="act-btn" onclick="addToCalendar('${t.id}')" title="Add to Google Calendar">📅</button>
       <button class="act-btn" onclick="deleteTask('${t.id}')" title="Delete">✕</button>
     </div>
   </div>`;
